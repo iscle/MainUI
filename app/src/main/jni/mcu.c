@@ -329,7 +329,7 @@ static int mcu_read_packet(mcu_packet_t *mcuPacket) {
 
     mcuPacket->data = malloc(mcuPacket->len);
     if (mcuPacket->data == NULL) {
-        return -EIO;
+        return -ENOMEM;
     }
 
     ret = uart_read(&mcu_uart, mcuPacket->data, mcuPacket->len);
@@ -459,7 +459,9 @@ void * mcu_thread_func(void *arg) {
 
         if (state != 0) {
             ret = mcu_read_packet(&mcu_packet);
-            if (ret >= 0) {
+            if (ret < 0) {
+                LOG_E("Failed to read packet: %d", ret);
+            } else {
                 mcu_handle_packet(&mcu_packet);
                 free(mcu_packet.data);
             }
