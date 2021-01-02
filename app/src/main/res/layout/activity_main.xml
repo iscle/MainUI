@@ -6,13 +6,64 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <TextView
+    <LinearLayout
+        android:id="@+id/btn_list"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Hello World!"
+        android:orientation="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <Button
+            android:id="@+id/learn_touchkey_btn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Learn TouchKey" />
+
+        <Button
+            android:id="@+id/turn_btn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="BklTurn()" />
+
+        <Button
+            android:id="@+id/turnadj_0_btn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="BklTurnAdj(0)" />
+
+        <Button
+            android:id="@+id/turnadj_1_btn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="BklTurnAdj(1)" />
+
+        <Button
+            android:id="@+id/turncan_0_btn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="BklTurnCan(0)" />
+
+        <Button
+            android:id="@+id/turncan_1_btn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="BklTurnCan(1)" />
+
+        <Button
+            android:id="@+id/turnint_0_btn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="BklTurnInt(0)" />
+
+        <Button
+            android:id="@+id/turnint_1_btn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="BklTurnInt(1)" />
+
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

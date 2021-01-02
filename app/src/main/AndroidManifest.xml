@@ -3,6 +3,8 @@
     package="com.ts.MainUI"
     android:sharedUserId="android.uid.system">
 
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <application
         android:name=".MainUI"
         android:allowBackup="true"
@@ -11,6 +13,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MainUI">
+        <activity android:name=".LearnTouchKeyActivity"></activity>
+
+        <service android:name=".MainService" />
+
         <activity android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
