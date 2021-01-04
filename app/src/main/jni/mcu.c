@@ -82,50 +82,64 @@ int armstate0x5;
 
 static void mcu_print_arr(uint8_t *arr, size_t size) {
     size_t i;
-    char buf[1024];
+    char *buf;
 
-    sprintf(buf, "arr = ");
+    asprintf(&buf, "arr = ");
     for (i = 0; i < size; i++) {
-        sprintf(buf, "%s0x%02X", buf, arr[i]);
+        char *old = buf;
         if (i != size - 1) {
-            sprintf(buf, "%s, ", buf);
+            asprintf(&buf, "%s0x%02X, ", buf, arr[i]);
+        } else {
+            asprintf(&buf, "%s0x%02X", buf, arr[i]);
         }
+        free(old);
     }
     LOG_D("%s", buf);
+    free(buf);
 }
 
-static int mcu_send_command(uint8_t cmd, const uint8_t *data, size_t length) {
-    int i;
+static int mcu_send_command(uint8_t cmd, const uint8_t *data, uint8_t length) {
+    uint8_t magic = 0x23;
     uint8_t checksum;
-    uint8_t *buf;
+    int ret;
+    int i;
 
     LOG_D("Sending command 0x%02X with length %d", cmd, length);
 
-    buf = malloc(length + 4);
-    if (buf == NULL) {
-        LOG_E("malloc failed for %d!", length + 4);
-        return -ENOMEM;
-    }
-
-    buf[0] = 0x23;
-    buf[1] = cmd;
-    buf[2] = (uint8_t) length;
-    memcpy(&buf[3], data, length);
-
-    // Calculate the checksum
+    // Calculate checksum
     checksum = 0;
-    for (i = 1; i < 3 + length; i++) {
-        checksum ^= buf[i];
+    checksum ^= cmd;
+    checksum ^= length;
+    for (i = 0; i < length; i++) {
+        checksum ^= data[i];
     }
-    buf[i] = checksum;
-    LOG_D("buf[%d] = 0x%02X", i, checksum);
-    mcu_print_arr(buf, length + 4);
 
-    if (uart_write(&mcu_uart, buf, length + 4) == length + 4) {
-        return 0;
-    } else {
+    ret = uart_write(&mcu_uart, &magic, 1);
+    if (ret != 1) {
         return -EIO;
     }
+
+    ret = uart_write(&mcu_uart, &cmd, 1);
+    if (ret != 1) {
+        return -EIO;
+    }
+
+    ret = uart_write(&mcu_uart, &length, 1);
+    if (ret != 1) {
+        return -EIO;
+    }
+
+    ret = uart_write(&mcu_uart, data, length);
+    if (ret != length) {
+        return -EIO;
+    }
+
+    ret = uart_write(&mcu_uart, &checksum, 1);
+    if (ret != 1) {
+        return -EIO;
+    }
+
+    return 0;
 }
 
 static void mcu_send_arm_state() {
@@ -300,59 +314,59 @@ static int mcu_handle_packet(mcu_packet_t *packet) {
         }
         default: {
             LOG_D("Got unknown command from MCU: cmd = 0x%2X, len = %d", packet->cmd, packet->len);
-            break;
+            return -1;
         }
     }
 
     return 0;
 }
 
-static int mcu_read_packet(mcu_packet_t *mcuPacket) {
+static int mcu_read_packet(mcu_packet_t *mcu_packet) {
     int ret;
     int i;
     uint8_t calculatedChecksum;
 
-    ret = uart_read(&mcu_uart, &mcuPacket->header, 1);
-    if (ret != 1 || mcuPacket->header != 0x23) {
+    ret = uart_read(&mcu_uart, &mcu_packet->header, 1);
+    if (ret != 1 || mcu_packet->header != 0x23) {
         return -EIO;
     }
 
-    ret = uart_read(&mcu_uart, &mcuPacket->cmd, 1);
+    ret = uart_read(&mcu_uart, &mcu_packet->cmd, 1);
     if (ret != 1) {
         return -EIO;
     }
 
-    ret = uart_read(&mcu_uart, &mcuPacket->len, 1);
+    ret = uart_read(&mcu_uart, &mcu_packet->len, 1);
     if (ret != 1) {
         return -EIO;
     }
 
-    mcuPacket->data = malloc(mcuPacket->len);
-    if (mcuPacket->data == NULL) {
+    mcu_packet->data = malloc(mcu_packet->len);
+    if (mcu_packet->data == NULL) {
         return -ENOMEM;
     }
 
-    ret = uart_read(&mcu_uart, mcuPacket->data, mcuPacket->len);
-    if (ret != mcuPacket->len) {
-        free(mcuPacket->data);
+    ret = uart_read(&mcu_uart, mcu_packet->data, mcu_packet->len);
+    if (ret != mcu_packet->len) {
+        free(mcu_packet->data);
         return -EIO;
     }
 
-    ret = uart_read(&mcu_uart, &mcuPacket->checksum, 1);
+    ret = uart_read(&mcu_uart, &mcu_packet->checksum, 1);
     if (ret != 1) {
-        free(mcuPacket->data);
+        free(mcu_packet->data);
         return -EIO;
     }
 
     calculatedChecksum = 0;
-    calculatedChecksum ^= mcuPacket->cmd;
-    calculatedChecksum ^= mcuPacket->len;
-    for (i = 0; i < mcuPacket->len; i++) {
-        calculatedChecksum ^= mcuPacket->data[i];
+    calculatedChecksum ^= mcu_packet->cmd;
+    calculatedChecksum ^= mcu_packet->len;
+    for (i = 0; i < mcu_packet->len; i++) {
+        calculatedChecksum ^= mcu_packet->data[i];
     }
 
-    if (calculatedChecksum != mcuPacket->checksum) {
-        free(mcuPacket->data);
+    if (calculatedChecksum != mcu_packet->checksum) {
+        free(mcu_packet->data);
         return -EIO;
     }
 
@@ -523,7 +537,7 @@ void * mcu_thread_func(void *arg) {
         }
     }
 
-    return 0;
+    return NULL;
 }
 
 void mcu_toggle_backlight(void) {
