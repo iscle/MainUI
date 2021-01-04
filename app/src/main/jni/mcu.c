@@ -66,7 +66,8 @@ typedef struct {
 static arm_state_t arm_state;
 static uart_t mcu_uart;
 static uint8_t closed;
-static pthread_t mcuThread;
+static pthread_t mcu_thread;
+static pthread_mutex_t uart_lock;
 
 // mcustate[8] = Ill
 static uint8_t mcustate[19];
@@ -77,7 +78,6 @@ int mcucan0;
 int mcuver44;
 int mcuid128;
 int mcuid129;
-int armstate0x0;
 int armstate0x5;
 
 static void mcu_print_arr(uint8_t *arr, size_t size) {
@@ -104,8 +104,6 @@ static int mcu_send_command(uint8_t cmd, const uint8_t *data, uint8_t length) {
     int ret;
     int i;
 
-    LOG_D("Sending command 0x%02X with length %d", cmd, length);
-
     // Calculate checksum
     checksum = 0;
     checksum ^= cmd;
@@ -114,32 +112,44 @@ static int mcu_send_command(uint8_t cmd, const uint8_t *data, uint8_t length) {
         checksum ^= data[i];
     }
 
+    pthread_mutex_lock(&uart_lock);
+
+    LOG_D("Sending command 0x%02X with length %d and checksum 0x%02X", cmd, length, checksum);
+
     ret = uart_write(&mcu_uart, &magic, 1);
     if (ret != 1) {
-        return -EIO;
+        ret = -EIO;
+        goto exit;
     }
 
     ret = uart_write(&mcu_uart, &cmd, 1);
     if (ret != 1) {
-        return -EIO;
+        ret = -EIO;
+        goto exit;
     }
 
     ret = uart_write(&mcu_uart, &length, 1);
     if (ret != 1) {
-        return -EIO;
+        ret = -EIO;
+        goto exit;
     }
 
     ret = uart_write(&mcu_uart, data, length);
     if (ret != length) {
-        return -EIO;
+        ret = -EIO;
+        goto exit;
     }
 
     ret = uart_write(&mcu_uart, &checksum, 1);
     if (ret != 1) {
-        return -EIO;
+        ret = -EIO;
+        goto exit;
     }
 
-    return 0;
+    ret = 0;
+exit:
+    pthread_mutex_unlock(&uart_lock);
+    return ret;
 }
 
 static void mcu_send_arm_state() {
@@ -201,7 +211,9 @@ static void mcu_send_arm_state() {
 }
 
 void mcu_set_backlight(int backlight) {
+    LOG_D("Setting backlight to %d", backlight);
     arm_state.bl_day = arm_state.bl_night = (backlight & 0x0F);
+    mcu_send_arm_state();
 }
 
 static int mcu_handle_packet(mcu_packet_t *packet) {
@@ -324,7 +336,7 @@ static int mcu_handle_packet(mcu_packet_t *packet) {
 static int mcu_read_packet(mcu_packet_t *mcu_packet) {
     int ret;
     int i;
-    uint8_t calculatedChecksum;
+    uint8_t checksum;
 
     ret = uart_read(&mcu_uart, &mcu_packet->header, 1);
     if (ret != 1 || mcu_packet->header != 0x23) {
@@ -358,14 +370,14 @@ static int mcu_read_packet(mcu_packet_t *mcu_packet) {
         return -EIO;
     }
 
-    calculatedChecksum = 0;
-    calculatedChecksum ^= mcu_packet->cmd;
-    calculatedChecksum ^= mcu_packet->len;
+    checksum = 0;
+    checksum ^= mcu_packet->cmd;
+    checksum ^= mcu_packet->len;
     for (i = 0; i < mcu_packet->len; i++) {
-        calculatedChecksum ^= mcu_packet->data[i];
+        checksum ^= mcu_packet->data[i];
     }
 
-    if (calculatedChecksum != mcu_packet->checksum) {
+    if (checksum != mcu_packet->checksum) {
         free(mcu_packet->data);
         return -EIO;
     }
@@ -490,10 +502,10 @@ void * mcu_thread_func(void *arg) {
                 mcuver44 = 0;
                 mcuid128 = 0;
                 mcuid129 = 0;
-                armstate0x0 = 0;
+                arm_state.state = 0;
                 arm_state.mute_state = 1;
                 arm_state.disc_state = 0;
-                state = 2;
+                state = 2; // TODO: FIX ME OR REMOVE CASE 1
                 break;
             }
             case 1: {
@@ -521,7 +533,7 @@ void * mcu_thread_func(void *arg) {
                     }
                 } else {
                     state = 4;
-                    armstate0x0 = '\n';
+                    arm_state.state = '\n';
                     LOG_D("Mcu Sync OK! BatFirst=%d", mcustate[1]);
                 }
                 break;
@@ -563,22 +575,33 @@ int mcu_init(void) {
     }
     close(ret);
 
+    ret = pthread_mutex_init(&uart_lock, NULL);
+    if (ret < 0) {
+        LOG_E("Failed to initialize uart mutex lock: %d", ret);
+        return ret;
+    }
+
     ret = uart_open(&mcu_uart, "/dev/ttyMT2");
     if (ret < 0) {
-        LOG_E("Failed to open mcu uart!");
+        LOG_E("Failed to open mcu uart: %d", ret);
         return ret;
     }
 
     memset(&arm_state, 0, sizeof(arm_state));
     arm_state.bl_ill_state = 1;
-    arm_state.bl_turn_int = 1;
+    //arm_state.bl_turn_int = 1;
     arm_state.ext_amp = 1;
     arm_state.ill_r = 0xFF;
     arm_state.ill_g = 0xFF;
     arm_state.ill_b = 0xFF;
     arm_state.gsensor = 0x4B;
 
-    pthread_create(&mcuThread, NULL, mcu_thread_func, NULL);
+    ret = pthread_create(&mcu_thread, NULL, mcu_thread_func, NULL);
+    if (ret < 0) {
+        LOG_E("Failed to create mcu thread: %d", ret);
+        // TODO: Close uart and destroy mutex
+        return ret;
+    }
 
     return 0;
 }
