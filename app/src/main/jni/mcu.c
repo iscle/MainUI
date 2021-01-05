@@ -99,7 +99,7 @@ static void mcu_print_arr(uint8_t *arr, size_t size) {
 }
 
 static int mcu_send_command(uint8_t cmd, const uint8_t *data, uint8_t length) {
-    uint8_t magic = 0x23;
+    const uint8_t magic = 0x23;
     uint8_t checksum;
     int ret;
     int i;
@@ -153,7 +153,7 @@ exit:
 }
 
 static void mcu_send_arm_state() {
-    uint8_t data[9];
+    uint8_t data[9] = {0};
 
     data[0] = (arm_state.state & 0x0F);
     if (arm_state.mute_state != 0) {
@@ -169,7 +169,6 @@ static void mcu_send_arm_state() {
         data[0] |= CMMB;
     }
 
-    data[1] = 0;
     if (arm_state.fcam_state != 0) {
         data[1] |= FCAM;
     }
@@ -386,7 +385,7 @@ static int mcu_read_packet(mcu_packet_t *mcu_packet) {
 }
 
 static void mcu_send_hold(void) {
-    uint8_t data[1];
+    uint8_t data[1] = {0};
 
     data[0] = 0;
     mcu_send_command(0x48, data, sizeof(data));
@@ -519,9 +518,9 @@ void * mcu_thread_func(void *arg) {
             case 2: {
                 state = 3;
                 mcu_send_arm_state();
-                armstate0x5 = 0;
                 mcu_send_init_1();
                 mcu_send_init_2();
+                armstate0x5 = 0;
                 LOG_D("Send Sync cmd, paraok=%d, verok=%d, idok=%d", mcustate[0], mcuver44, mcuid128);
                 break;
             }
@@ -568,12 +567,12 @@ int mcu_init(void) {
     ret = open("/dev/block/platform/soc/11230000.mmc/by-name/forfanzone", O_RDONLY);
     if (ret < 0) {
         LOG_E("Failed to open forfanzone");
-        return ret;
+    } else {
+        if (read(ret, ftsetting, sizeof(ftsetting)) != sizeof(ftsetting)) {
+            LOG_E("Failed to read ftsetting!");
+        }
+        close(ret);
     }
-    if (read(ret, ftsetting, sizeof(ftsetting)) != sizeof(ftsetting)) {
-        LOG_E("Failed to read ftsetting!");
-    }
-    close(ret);
 
     ret = pthread_mutex_init(&uart_lock, NULL);
     if (ret < 0) {
@@ -584,6 +583,7 @@ int mcu_init(void) {
     ret = uart_open(&mcu_uart, "/dev/ttyMT2");
     if (ret < 0) {
         LOG_E("Failed to open mcu uart: %d", ret);
+        pthread_mutex_destroy(&uart_lock);
         return ret;
     }
 
@@ -595,11 +595,13 @@ int mcu_init(void) {
     arm_state.ill_g = 0xFF;
     arm_state.ill_b = 0xFF;
     arm_state.gsensor = 0x4B;
+    arm_state.bl_day = arm_state.bl_night = 6;
 
     ret = pthread_create(&mcu_thread, NULL, mcu_thread_func, NULL);
     if (ret < 0) {
         LOG_E("Failed to create mcu thread: %d", ret);
-        // TODO: Close uart and destroy mutex
+        pthread_mutex_destroy(&uart_lock);
+        uart_close(&mcu_uart);
         return ret;
     }
 
