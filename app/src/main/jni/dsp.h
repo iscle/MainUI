@@ -1,7 +1,9 @@
 #ifndef MAINUI_DSP_H
 #define MAINUI_DSP_H
 
-int dsp_read_uart(void);
+#include <stdint.h>
+
+int dsp_send_volume(uint8_t volume);
 
 int dsp_init(void);
 

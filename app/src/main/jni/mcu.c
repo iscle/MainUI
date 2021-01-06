@@ -10,7 +10,6 @@
 #include <errno.h>
 #include "log.h"
 #include "uart.h"
-#include "dsp.h"
 
 #define TAG "Mcu"
 
@@ -487,10 +486,6 @@ void * mcu_thread_func(void *arg) {
         //sleep(1);
         //usleep(300000);
 
-        if (state == 4) {
-            //dsp_read_uart();
-        }
-
         if (state != 0) {
             ret = mcu_read_packet(&mcu_packet);
             if (ret < 0) {
@@ -591,7 +586,7 @@ int mcu_init(void) {
 
     ret = uart_open(&mcu_uart, "/dev/ttyMT2");
     if (ret < 0) {
-        LOG_E("Failed to open mcu uart: %d", ret);
+        LOG_E("Failed to open uart: %d", ret);
         pthread_mutex_destroy(&uart_lock);
         return ret;
     }

@@ -22,8 +22,11 @@ typedef struct {
 } dsp_packet_t;
 
 static uart_t dsp_uart;
+static uint8_t closed;
+static pthread_t dsp_thread;
+static pthread_mutex_t uart_lock;
 
-static void mcu_print_arr(uint8_t *arr, size_t size) {
+static void dsp_print_arr(uint8_t *arr, size_t size) {
     size_t i;
     char *buf;
 
@@ -45,10 +48,10 @@ int dsp_read_uart(void) {
     uint8_t data[32];
     int ret;
 
-    ret = uart_read(&dsp_uart, data, sizeof(data));
+    ret = uart_read(&dsp_uart, data, 5);
 
     if (ret >= 0) {
-        mcu_print_arr(data, ret);
+        dsp_print_arr(data, ret);
     } else {
         LOG_D("dsp read failed: %s (%d)", strerror(errno), errno);
     }
@@ -240,9 +243,11 @@ int dsp_send_vbass(uint8_t vbass_en, uint16_t vbass_1, uint16_t vbass_2, uint16_
 int dsp_send_volume(uint8_t volume) {
     // cmd = 0x03
     // len = 1
-    uint8_t data[1] = {0};
+    uint8_t data[1];
 
-    return 0;
+    data[0] = volume;
+
+    return dsp_send_command(0x03, data, sizeof(data));
 }
 
 int dsp_send_init(void) {
@@ -375,7 +380,7 @@ void * dsp_thread_func(void *arg) {
     dsp_packet_t dsp_packet;
     int ret;
 
-    ret = dsp_read_packet(&dsp_packet);
+    /*ret = dsp_read_packet(&dsp_packet);
     if (ret < 0) {
         LOG_D("Failed to read packet: %d", ret);
     } else {
@@ -384,6 +389,15 @@ void * dsp_thread_func(void *arg) {
         if (ret < 0) {
             LOG_D("dsp_handle_packet failed: %d", ret);
         }
+    }*/
+
+    while (!closed) {
+        usleep(16667);
+        //sleep(1);
+        //usleep(300000);
+
+
+
     }
 
     return NULL;
@@ -392,9 +406,24 @@ void * dsp_thread_func(void *arg) {
 int dsp_init(void) {
     int ret;
 
+    ret = pthread_mutex_init(&uart_lock, NULL);
+    if (ret < 0) {
+        LOG_E("Failed to initialize uart mutex lock: %d", ret);
+        return ret;
+    }
+
     ret = uart_open(&dsp_uart, "/dev/ttyMT3");
     if (ret < 0) {
-        LOG_E("Failed to open dsp uart!");
+        LOG_E("Failed to open uart!");
+        pthread_mutex_destroy(&uart_lock);
+        return ret;
+    }
+
+    ret = pthread_create(&dsp_thread, NULL, dsp_thread_func, NULL);
+    if (ret < 0) {
+        LOG_E("Failed to create dsp thread: %d", ret);
+        pthread_mutex_destroy(&uart_lock);
+        uart_close(&dsp_uart);
         return ret;
     }
 
