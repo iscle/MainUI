@@ -29,14 +29,14 @@ Java_com_ts_MainUI_NativeLib_init(JNIEnv *env, jclass clazz) {
         LOG_D("Touch ok!");
     }
 
-    ret = mcu_init();
-    if (ret == 0) {
-        LOG_D("MCU ok!");
-    }
-
     ret = dsp_init();
     if (ret == 0) {
         LOG_D("DSP ok!");
+    }
+
+    ret = mcu_init();
+    if (ret == 0) {
+        LOG_D("MCU ok!");
     }
 
 }
@@ -50,4 +50,5 @@ Java_com_ts_MainUI_NativeLib_toggleBacklight(JNIEnv *env, jclass clazz) {
         bl = 0;
     }
     mcu_set_backlight(bl);
+    //mcu_toggle_backlight();
 }

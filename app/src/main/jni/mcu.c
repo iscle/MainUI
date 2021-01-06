@@ -7,8 +7,10 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <fcntl.h>
+#include <errno.h>
 #include "log.h"
 #include "uart.h"
+#include "dsp.h"
 
 #define TAG "Mcu"
 
@@ -32,7 +34,7 @@
 uint8_t ftsetting[0xC88];
 
 typedef struct {
-    uint8_t header;
+    uint8_t magic;
     uint8_t cmd;
     uint8_t len;
     uint8_t *data;
@@ -74,11 +76,11 @@ static uint8_t mcustate[19];
 static uint8_t mcukey[8];
 static uint8_t mcucan[652];
 
-int mcucan0;
-int mcuver44;
-int mcuid128;
-int mcuid129;
-int armstate0x5;
+static int mcucan0;
+static int mcuver44;
+static int mcuid128;
+static int mcuid129;
+static int armstate0x5;
 
 static void mcu_print_arr(uint8_t *arr, size_t size) {
     size_t i;
@@ -114,7 +116,7 @@ static int mcu_send_command(uint8_t cmd, const uint8_t *data, uint8_t length) {
 
     pthread_mutex_lock(&uart_lock);
 
-    LOG_D("Sending command 0x%02X with length %d and checksum 0x%02X", cmd, length, checksum);
+    //LOG_D("Sending command 0x%02X with length %d and checksum 0x%02X", cmd, length, checksum);
 
     ret = uart_write(&mcu_uart, &magic, 1);
     if (ret != 1) {
@@ -216,7 +218,7 @@ void mcu_set_backlight(int backlight) {
 }
 
 static int mcu_handle_packet(mcu_packet_t *packet) {
-    LOG_D("Handling new MCU packet: cmd = 0x%2X, len = %d", packet->cmd, packet->len);
+    //LOG_D("Handling new MCU packet: cmd = 0x%2X, len = %d", packet->cmd, packet->len);
 
     switch (packet->cmd) {
         case 0x43: {
@@ -267,7 +269,7 @@ static int mcu_handle_packet(mcu_packet_t *packet) {
             mcustate[14] = packet->data[6];
             mcustate[15] = packet->data[7];
             mcustate[16] = packet->data[8];
-            mcu_print_arr(mcustate, sizeof(mcustate));
+            //mcu_print_arr(mcustate, sizeof(mcustate));
             /*uVar5 = 1 - uVar13;
             if (1 < uVar13) {
                 uVar5 = 0;
@@ -337,36 +339,40 @@ static int mcu_read_packet(mcu_packet_t *mcu_packet) {
     int i;
     uint8_t checksum;
 
-    ret = uart_read(&mcu_uart, &mcu_packet->header, 1);
-    if (ret != 1 || mcu_packet->header != 0x23) {
-        return -EIO;
+    ret = uart_read(&mcu_uart, &mcu_packet->magic, 1);
+    if (ret != 1 || mcu_packet->magic != 0x23) {
+        return -errno;
     }
 
     ret = uart_read(&mcu_uart, &mcu_packet->cmd, 1);
     if (ret != 1) {
-        return -EIO;
+        return -errno;
     }
 
     ret = uart_read(&mcu_uart, &mcu_packet->len, 1);
     if (ret != 1) {
-        return -EIO;
+        return -errno;
+    }
+
+    if (mcu_packet->len == 0) {
+        return -EBADMSG;
     }
 
     mcu_packet->data = malloc(mcu_packet->len);
     if (mcu_packet->data == NULL) {
-        return -ENOMEM;
+        return -errno;
     }
 
     ret = uart_read(&mcu_uart, mcu_packet->data, mcu_packet->len);
     if (ret != mcu_packet->len) {
         free(mcu_packet->data);
-        return -EIO;
+        return -errno;
     }
 
     ret = uart_read(&mcu_uart, &mcu_packet->checksum, 1);
     if (ret != 1) {
         free(mcu_packet->data);
-        return -EIO;
+        return -errno;
     }
 
     checksum = 0;
@@ -378,7 +384,7 @@ static int mcu_read_packet(mcu_packet_t *mcu_packet) {
 
     if (checksum != mcu_packet->checksum) {
         free(mcu_packet->data);
-        return -EIO;
+        return -EBADMSG;
     }
 
     return 0;
@@ -468,9 +474,7 @@ static void mcu_send_init_2(void) {
     data[44] = data[39];
     data[45] = data[40];
 
-    LOG_D("Send command start");
     mcu_send_command(0x4B, data, 0x2E);
-    LOG_D("Send command end");
 }
 
 void * mcu_thread_func(void *arg) {
@@ -479,8 +483,13 @@ void * mcu_thread_func(void *arg) {
     int state = 0;
 
     while (!closed) {
-        //usleep(16000);
-        sleep(1);
+        usleep(16667);
+        //sleep(1);
+        //usleep(300000);
+
+        if (state == 4) {
+            //dsp_read_uart();
+        }
 
         if (state != 0) {
             ret = mcu_read_packet(&mcu_packet);
@@ -492,7 +501,7 @@ void * mcu_thread_func(void *arg) {
             }
         }
 
-        LOG_D("state = %d", state);
+        //LOG_D("state = %d", state);
         switch (state) {
             case 0: {
                 state = 1;

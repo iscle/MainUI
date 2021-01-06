@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <fcntl.h>
+#include <errno.h>
 #include "dsp.h"
 #include "uart.h"
 #include "log.h"
@@ -13,6 +14,7 @@
 #define TAG "Dsp"
 
 typedef struct {
+    uint8_t magic[2];
     uint8_t cmd;
     uint8_t len;
     uint8_t *data;
@@ -21,8 +23,39 @@ typedef struct {
 
 static uart_t dsp_uart;
 
+static void mcu_print_arr(uint8_t *arr, size_t size) {
+    size_t i;
+    char *buf;
+
+    asprintf(&buf, "arr = ");
+    for (i = 0; i < size; i++) {
+        char *old = buf;
+        if (i != size - 1) {
+            asprintf(&buf, "%s0x%02X, ", buf, arr[i]);
+        } else {
+            asprintf(&buf, "%s0x%02X", buf, arr[i]);
+        }
+        free(old);
+    }
+    LOG_D("%s", buf);
+    free(buf);
+}
+
+int dsp_read_uart(void) {
+    uint8_t data[32];
+    int ret;
+
+    ret = uart_read(&dsp_uart, data, sizeof(data));
+
+    if (ret >= 0) {
+        mcu_print_arr(data, ret);
+    } else {
+        LOG_D("dsp read failed: %s (%d)", strerror(errno), errno);
+    }
+}
+
 static int dsp_send_command(uint8_t cmd, const uint8_t *data, uint8_t length) {
-    const uint8_t magic[2] = {0x76, 0x58};
+    const uint8_t magic[2] = {0x8A, 0xA8};
     uint8_t checksum[2] = {0x00, 0x5A};
     uint8_t i;
     uint8_t ret;
@@ -66,10 +99,12 @@ static int dsp_send_command(uint8_t cmd, const uint8_t *data, uint8_t length) {
 }
 
 int dsp_send_adcgain(uint8_t adcgain) {
-    // cmd = 0x02
-    // len = 2
+    uint8_t data[2];
 
-    return 0;
+    data[0] = 0;
+    data[1] = adcgain - 0x38;
+
+    return dsp_send_command(0x02, data, sizeof(data));
 }
 
 int dsp_send_chn(uint8_t chn) {
@@ -79,11 +114,17 @@ int dsp_send_chn(uint8_t chn) {
     return 0;
 }
 
-int dsp_send_delay(uint8_t delay) {
-    // cmd = 0x09
-    // len = 6
+int dsp_send_delay(uint8_t delay_1, uint8_t delay_2, uint8_t delay_3, uint8_t delay_4) {
+    uint8_t data[6];
 
-    return 0;
+    data[0] = delay_1;
+    data[1] = delay_2;
+    data[2] = delay_3;
+    data[3] = delay_4;
+    data[4] = 0;
+    data[5] = 0;
+
+    return dsp_send_command(0x09, data, sizeof(data));
 }
 
 int dsp_send_eq(uint8_t eq) {
@@ -100,11 +141,17 @@ int dsp_send_fadbal(uint8_t fadbal) {
     return 0;
 }
 
-int dsp_send_filter(uint8_t filter) {
-    // cmd = 0x05
-    // len = 6
+int dsp_send_filter(uint8_t filter_1, uint16_t filter_2, uint8_t filter_3, uint16_t filter_4) {
+    uint8_t data[6];
 
-    return 0;
+    data[0] = filter_1;
+    data[1] = filter_2;
+    data[2] = filter_2 >> 8;
+    data[3] = filter_3;
+    data[4] = filter_4;
+    data[5] = filter_4 >> 8;
+
+    return dsp_send_command(0x05, data, sizeof(data));
 }
 
 int dsp_send_filter_fb(uint8_t filter_fb) {
@@ -115,25 +162,25 @@ int dsp_send_filter_fb(uint8_t filter_fb) {
 }
 
 int dsp_send_fs(uint8_t fs) {
-    // cmd = 17
-    // len = 1
+    uint8_t data[1];
 
-    return 0;
+    data[0] = fs; // 0x20 or 0x40
+
+    return dsp_send_command(0x11, data, sizeof(data));
 }
 
-int dsp_send_init(void) {
-    // cmd =
-    // len =
-
-    return 0;
-}
-
-int dsp_send_lud(uint8_t lud) {
-    // cmd = 0x06
-    // len = 7
+int dsp_send_loud(uint8_t loud_0, uint16_t loud_1, uint16_t loud_2, uint8_t loud_3, uint8_t loud_4) {
     uint8_t data[7];
 
-    return 0;
+    data[0] = loud_0;
+    data[1] = loud_1;
+    data[2] = loud_1 >> 8;
+    data[3] = loud_2;
+    data[4] = loud_2 >> 8;
+    data[5] = loud_3 - 0x38;
+    data[6] = loud_4 - 0x38;
+
+    return dsp_send_command(0x06, data, sizeof(data));
 }
 
 int dsp_send_mix(uint8_t mix) {
@@ -153,19 +200,41 @@ int dsp_send_reverb(uint8_t reverb) {
 }
 
 int dsp_send_subfreq(uint8_t subfreq) {
-    // cmd = 0x1b
-    // len = 2
     uint8_t data[2];
 
-    return 0;
+    data[0] = subfreq;
+    data[1] = 0;
+
+    return dsp_send_command(0x1B, data, sizeof(data));
 }
 
-int dsp_send_vbass(uint8_t vbass) {
-    // cmd = 0x61
-    // len = 22
+int dsp_send_vbass(uint8_t vbass_en, uint16_t vbass_1, uint16_t vbass_2, uint16_t vbass_3) {
     uint8_t data[22];
 
-    return 0;
+    data[0] = vbass_en;
+    data[1] = 0x08;
+    data[2] = vbass_1;
+    data[3] = vbass_1 >> 8;
+    data[4] = vbass_2;
+    data[5] = vbass_2 >> 8;
+    data[6] = vbass_3;
+    data[7] = vbass_3 >> 8;
+    data[8] = 0x00;
+    data[9] = 0x03;
+    data[10] = 0x03;
+    data[11] = 0x26;
+    data[12] = 0x02;
+    data[13] = 0x19;
+    data[14] = 0x03;
+    data[15] = 0x52;
+    data[16] = 0x00;
+    data[17] = 0x02;
+    data[18] = 0x02;
+    data[19] = 0x03;
+    data[20] = 0x04;
+    data[21] = 0x03;
+
+    return dsp_send_command(0x07, data, sizeof(data));
 }
 
 int dsp_send_volume(uint8_t volume) {
@@ -176,8 +245,23 @@ int dsp_send_volume(uint8_t volume) {
     return 0;
 }
 
-static int dsp_handle_packet(dsp_packet_t *packet) {
+int dsp_send_init(void) {
+    int ret;
 
+    ret = dsp_send_volume(0);
+    ret = dsp_send_fadbal(0);
+    ret = dsp_send_loud(0, 0, 0, 0, 0);
+    ret = dsp_send_vbass(0, 0, 0, 0);
+    ret = dsp_send_filter(0, 0, 0, 0);
+    ret = dsp_send_filter_fb(0);
+    ret = dsp_send_subfreq(0);
+    ret = dsp_send_eq(0);
+    ret = dsp_send_delay(0, 0, 0, 0);
+
+    return 0;
+}
+
+static int dsp_handle_packet(dsp_packet_t *packet) {
     switch (packet->cmd) {
         case 0x12: {
             if (packet->len != 1) {
@@ -232,14 +316,59 @@ static int dsp_handle_packet(dsp_packet_t *packet) {
     return 0;
 }
 
-static int dsp_read_packet(dsp_packet_t *dsp_packet) {
+int dsp_read_packet(dsp_packet_t *dsp_packet) {
     uint8_t checksum;
     uint8_t i;
+    int ret;
 
-    checksum = 0x5a;
+    ret = uart_read(&dsp_uart, &dsp_packet->magic[0], 1);
+    if (ret != 1 || dsp_packet->magic[0] != 0x8A) {
+        return -EIO;
+    }
+
+    ret = uart_read(&dsp_uart, &dsp_packet->magic[1], 1);
+    if (ret != 1 || dsp_packet->magic[1] != 0xA8) {
+        return -EIO;
+    }
+
+    ret = uart_read(&dsp_uart, &dsp_packet->cmd, 1);
+    if (ret != 1) {
+        return -EIO;
+    }
+
+    ret = uart_read(&dsp_uart, &dsp_packet->len, 1);
+    if (ret != 1) {
+        return -EIO;
+    }
+
+    dsp_packet->data = malloc(dsp_packet->len);
+    if (dsp_packet->data == NULL) {
+        return -ENOMEM;
+    }
+
+    ret = uart_read(&dsp_uart, dsp_packet->data, dsp_packet->len);
+    if (ret != dsp_packet->len) {
+        free(dsp_packet->data);
+        return -EIO;
+    }
+
+    ret = uart_read(&dsp_uart, &dsp_packet->checksum, 1);
+    if (ret != 1) {
+        free(dsp_packet->data);
+        return -EIO;
+    }
+
+    checksum = 0x5A;
     for (i = 0; i < dsp_packet->len; i++) {
         checksum += dsp_packet->data[i];
     }
+
+    if (dsp_packet->checksum != checksum) {
+        free(dsp_packet->data);
+        return -EIO;
+    }
+
+    return 0;
 }
 
 void * dsp_thread_func(void *arg) {
