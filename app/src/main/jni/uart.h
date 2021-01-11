@@ -15,6 +15,6 @@ int uart_write(uart_t *uart, const uint8_t *data, size_t length);
 
 int uart_read(uart_t *uart, uint8_t *data, size_t length);
 
-int uart_close(uart_t *uart);
+void uart_close(uart_t *uart);
 
 #endif //MAINUI_UART_H

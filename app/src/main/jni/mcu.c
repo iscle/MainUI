@@ -482,7 +482,7 @@ void *mcu_thread_func(void *arg) {
     int state = 0;
 
     while (!closed) {
-        usleep(16667);
+        usleep(THREAD_SLEEP_US);
 
         if (state != 0) {
             ret = mcu_read_packet(&mcu_packet);

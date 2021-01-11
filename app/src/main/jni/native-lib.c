@@ -131,7 +131,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     // Save the Java vm for use in other functions
     java_vm = vm;
 
-    if ((*vm)->GetEnv(vm, &env, JNI_VERSION_1_6) != JNI_OK) {
+    if ((*vm)->GetEnv(vm, (void **) &env, JNI_VERSION_1_6) != JNI_OK) {
         LOG_E("Failed to get environment for vm!");
         return JNI_ERR;
     }

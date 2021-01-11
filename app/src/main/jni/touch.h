@@ -1,7 +1,7 @@
 #ifndef MAINUI_TOUCH_H
 #define MAINUI_TOUCH_H
 
-int touch_close(void);
+void touch_close(void);
 
 int touch_write(char *buffer);
 

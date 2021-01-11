@@ -431,16 +431,14 @@ void * dsp_thread_func(void *arg) {
 
     LOG_D("Starting DSP loop...");
     while (!closed) {
-        //usleep(16667);
-        sleep(1);
+        usleep(THREAD_SLEEP_US);
+        //sleep(1);
         //usleep(300000);
 
-        i_native_on_touch_button_pressed(-69, 69);
-
         //dsp_read_packet(&dsp_packet);
-        //LOG_D("Calling dsp_read_uart!");
-        //dsp_read_uart();
-        //LOG_D("dsp_read_uart finished!");
+        LOG_D("Calling dsp_read_uart!");
+        dsp_read_uart();
+        LOG_D("dsp_read_uart finished!");
 
     }
 

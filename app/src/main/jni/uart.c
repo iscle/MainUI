@@ -91,6 +91,6 @@ int uart_read(uart_t *uart, uint8_t *data, size_t length) {
     return count;
 }
 
-int uart_close(uart_t *uart) {
-    return close(uart->fd);
+void uart_close(uart_t *uart) {
+    close(uart->fd);
 }
