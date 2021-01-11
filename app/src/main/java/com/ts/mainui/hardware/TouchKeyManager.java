@@ -1,10 +1,8 @@
-package com.ts.MainUI.hardware;
+package com.ts.mainui.hardware;
 
 import android.content.Context;
 import android.util.Log;
-import android.widget.Toast;
 
-import java.util.Iterator;
 import java.util.LinkedList;
 
 public class TouchKeyManager {

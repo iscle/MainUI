@@ -1,4 +1,4 @@
-package com.ts.MainUI;
+package com.ts.mainui;
 
 import android.app.Application;
 import android.hardware.input.InputManager;

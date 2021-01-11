@@ -8,7 +8,7 @@
 
     <LinearLayout
         android:id="@+id/btn_list"
-        android:layout_width="wrap_content"
+        android:layout_width="300dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -23,28 +23,28 @@
             android:text="Learn TouchKey" />
 
         <Button
-            android:id="@+id/turn_btn"
+            android:id="@+id/backlight_day"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="BklTurn()" />
+            android:text="backlight day" />
 
         <Button
-            android:id="@+id/turnadj_0_btn"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="BklTurnAdj(0)" />
-
-        <Button
-            android:id="@+id/turnadj_1_btn"
+            android:id="@+id/backlight_night"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="BklTurnAdj(1)" />
+            android:text="backlight night" />
 
         <Button
-            android:id="@+id/turncan_0_btn"
+            android:id="@+id/backlight_state"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="BklTurnCan(0)" />
+            android:text="backlight_state" />
+
+        <Button
+            android:id="@+id/backlight_ill_state"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="backlight_ill_state" />
 
         <Button
             android:id="@+id/turncan_1_btn"

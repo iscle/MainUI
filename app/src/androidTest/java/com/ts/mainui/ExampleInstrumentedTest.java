@@ -1,4 +1,4 @@
-package com.ts.MainUI;
+package com.ts.mainui;
 
 import android.content.Context;
 

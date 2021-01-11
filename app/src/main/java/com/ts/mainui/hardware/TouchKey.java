@@ -1,4 +1,4 @@
-package com.ts.MainUI.hardware;
+package com.ts.mainui.hardware;
 
 public class TouchKey {
     private final int key;

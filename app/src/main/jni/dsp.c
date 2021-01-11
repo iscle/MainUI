@@ -48,13 +48,15 @@ int dsp_read_uart(void) {
     uint8_t data[32];
     int ret;
 
-    ret = uart_read(&dsp_uart, data, 5);
+    ret = uart_read(&dsp_uart, data, 4);
 
-    if (ret >= 0) {
-        dsp_print_arr(data, ret);
-    } else {
+    if (ret < 0) {
         LOG_D("dsp read failed: %s (%d)", strerror(errno), errno);
+    } else {
+        dsp_print_arr(data, ret);
     }
+
+    return ret;
 }
 
 static int dsp_send_command(uint8_t cmd, const uint8_t *data, uint8_t length) {
@@ -111,19 +113,24 @@ int dsp_send_adcgain(uint8_t adcgain) {
 }
 
 int dsp_send_chn(uint8_t chn) {
-    // cmd = 0x01
-    // len = 4
+    uint8_t data[4];
 
-    return 0;
+    data[0] = 0;
+    data[1] = 0;
+    data[2] = 0;
+    data[3] = 0;
+
+    return dsp_send_command(0x01, data, sizeof(data));
 }
 
-int dsp_send_delay(uint8_t delay_1, uint8_t delay_2, uint8_t delay_3, uint8_t delay_4) {
+// fl, fr, rl, rr => 0 - 200 (0.1ms)
+int dsp_send_delay(uint8_t fl, uint8_t fr, uint8_t rl, uint8_t rr) {
     uint8_t data[6];
 
-    data[0] = delay_1;
-    data[1] = delay_2;
-    data[2] = delay_3;
-    data[3] = delay_4;
+    data[0] = fl;
+    data[1] = fr;
+    data[2] = rl;
+    data[3] = rr;
     data[4] = 0;
     data[5] = 0;
 
@@ -137,22 +144,36 @@ int dsp_send_eq(uint8_t eq) {
     return 0;
 }
 
-int dsp_send_fadbal(uint8_t fadbal) {
-    // cmd = 0x04
-    // len = 6
-
-    return 0;
-}
-
-int dsp_send_filter(uint8_t filter_1, uint16_t filter_2, uint8_t filter_3, uint16_t filter_4) {
+int dsp_send_fadbal(uint8_t fad, uint8_t bal) {
     uint8_t data[6];
 
-    data[0] = filter_1;
-    data[1] = filter_2;
-    data[2] = filter_2 >> 8;
-    data[3] = filter_3;
-    data[4] = filter_4;
-    data[5] = filter_4 >> 8;
+    data[0] = 0;
+    data[1] = 0;
+    data[2] = 0;
+    data[3] = 0;
+    data[4] = 0;
+    data[5] = 0;
+
+    return dsp_send_command(0x04, data, sizeof(data));
+}
+
+// low_pass_enable => 0/1, low_pass => 1000 - 20000, high_pass_enable => 0/1, high_pass => 20 - 500
+int dsp_send_filter(uint8_t low_pass_enable, uint16_t low_pass, uint8_t high_pass_enable, uint16_t high_pass) {
+    uint8_t data[6];
+
+    if ((low_pass_enable < 0 || low_pass_enable > 1) ||
+        (low_pass < 1000 || low_pass > 20000) ||
+        (high_pass_enable < 0 || high_pass_enable > 1) ||
+        (high_pass < 20 || high_pass > 500)) {
+        return -EINVAL;
+    }
+
+    data[0] = low_pass_enable;
+    data[1] = low_pass;
+    data[2] = low_pass >> 8;
+    data[3] = high_pass_enable;
+    data[4] = high_pass;
+    data[5] = high_pass >> 8;
 
     return dsp_send_command(0x05, data, sizeof(data));
 }
@@ -164,24 +185,25 @@ int dsp_send_filter_fb(uint8_t filter_fb) {
     return 0;
 }
 
+// fs => 32/64
 int dsp_send_fs(uint8_t fs) {
     uint8_t data[1];
 
-    data[0] = fs; // 0x20 or 0x40
+    data[0] = fs;
 
     return dsp_send_command(0x11, data, sizeof(data));
 }
 
-int dsp_send_loud(uint8_t loud_0, uint16_t loud_1, uint16_t loud_2, uint8_t loud_3, uint8_t loud_4) {
+int dsp_send_loud(uint8_t enable, uint16_t low_freq, uint16_t high_freq, uint8_t low_gain, uint8_t high_gain) {
     uint8_t data[7];
 
-    data[0] = loud_0;
-    data[1] = loud_1;
-    data[2] = loud_1 >> 8;
-    data[3] = loud_2;
-    data[4] = loud_2 >> 8;
-    data[5] = loud_3 - 0x38;
-    data[6] = loud_4 - 0x38;
+    data[0] = enable;
+    data[1] = low_freq;
+    data[2] = low_freq >> 8;
+    data[3] = high_freq;
+    data[4] = high_freq >> 8;
+    data[5] = low_gain - 0x38;
+    data[6] = high_gain - 0x38;
 
     return dsp_send_command(0x06, data, sizeof(data));
 }
@@ -194,6 +216,7 @@ int dsp_send_mix(uint8_t mix) {
     return 0;
 }
 
+// reverb => 0 - 5
 int dsp_send_reverb(uint8_t reverb) {
     // cmd = 0x0a
     // len = 15
@@ -202,6 +225,7 @@ int dsp_send_reverb(uint8_t reverb) {
     return 0;
 }
 
+// subfreq => 80 - ?
 int dsp_send_subfreq(uint8_t subfreq) {
     uint8_t data[2];
 
@@ -211,17 +235,25 @@ int dsp_send_subfreq(uint8_t subfreq) {
     return dsp_send_command(0x1B, data, sizeof(data));
 }
 
-int dsp_send_vbass(uint8_t vbass_en, uint16_t vbass_1, uint16_t vbass_2, uint16_t vbass_3) {
+// enable => 0/1, gain => 0 - 400, level => 0 - 400, freq => 0 - 150
+int dsp_send_vbass(uint8_t enable, uint16_t gain, uint16_t level, uint16_t freq) {
     uint8_t data[22];
 
-    data[0] = vbass_en;
+    if ((enable < 0 || enable > 1) ||
+        (gain < 0 || gain > 400) ||
+        (level < 0 || level > 400) ||
+        (freq < 0 || freq > 150)) {
+        return -EINVAL;
+    }
+
+    data[0] = enable;
     data[1] = 0x08;
-    data[2] = vbass_1;
-    data[3] = vbass_1 >> 8;
-    data[4] = vbass_2;
-    data[5] = vbass_2 >> 8;
-    data[6] = vbass_3;
-    data[7] = vbass_3 >> 8;
+    data[2] = gain;
+    data[3] = gain >> 8;
+    data[4] = level;
+    data[5] = level >> 8;
+    data[6] = freq;
+    data[7] = freq >> 8;
     data[8] = 0x00;
     data[9] = 0x03;
     data[10] = 0x03;
@@ -240,10 +272,13 @@ int dsp_send_vbass(uint8_t vbass_en, uint16_t vbass_1, uint16_t vbass_2, uint16_
     return dsp_send_command(0x07, data, sizeof(data));
 }
 
+// volume => 0 - 197
 int dsp_send_volume(uint8_t volume) {
-    // cmd = 0x03
-    // len = 1
     uint8_t data[1];
+
+    if (volume < 0 || volume > 197) {
+        return -EINVAL;
+    }
 
     data[0] = volume;
 
@@ -254,7 +289,7 @@ int dsp_send_init(void) {
     int ret;
 
     ret = dsp_send_volume(0);
-    ret = dsp_send_fadbal(0);
+    ret = dsp_send_fadbal(0, 0);
     ret = dsp_send_loud(0, 0, 0, 0, 0);
     ret = dsp_send_vbass(0, 0, 0, 0);
     ret = dsp_send_filter(0, 0, 0, 0);
@@ -376,9 +411,12 @@ int dsp_read_packet(dsp_packet_t *dsp_packet) {
     return 0;
 }
 
+extern void i_native_on_touch_button_pressed(int x, int y);
 void * dsp_thread_func(void *arg) {
     dsp_packet_t dsp_packet;
     int ret;
+
+    LOG_D("DSP thread started!");
 
     /*ret = dsp_read_packet(&dsp_packet);
     if (ret < 0) {
@@ -391,12 +429,18 @@ void * dsp_thread_func(void *arg) {
         }
     }*/
 
+    LOG_D("Starting DSP loop...");
     while (!closed) {
-        usleep(16667);
-        //sleep(1);
+        //usleep(16667);
+        sleep(1);
         //usleep(300000);
 
+        i_native_on_touch_button_pressed(-69, 69);
 
+        //dsp_read_packet(&dsp_packet);
+        //LOG_D("Calling dsp_read_uart!");
+        //dsp_read_uart();
+        //LOG_D("dsp_read_uart finished!");
 
     }
 

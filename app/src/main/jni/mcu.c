@@ -30,8 +30,6 @@
 #define LCD_AVDD_2 0x44
 #define EX_AMP 0x80
 
-uint8_t ftsetting[0xC88];
-
 typedef struct {
     uint8_t magic;
     uint8_t cmd;
@@ -47,14 +45,14 @@ typedef struct {
     uint8_t fan_state;
     uint8_t cmmb_state;
     uint8_t fcam_state;
-    uint8_t bl_ill_state;
-    uint8_t bl_state;
-    uint8_t bl_turn_int;
-    uint8_t bl_turn_can;
+    uint8_t bl_state; // 0 => off, 1 => on (used to hide transitions between the android system and back camera?)
+    uint8_t bl_ill_state; // 0 => day/night, 1 => ? 2 => ? (only 0 and 1 used in original MainUI apk)
+    uint8_t bl_day_night; // 0 => day, 1 => night
+    uint8_t bl_day; // 0 - 6
+    uint8_t bl_night; // 0 - 6
+    uint8_t bl_turn_can; // 0/1 unknown functionality
     uint8_t lcd_avdd;
     uint8_t ext_amp;
-    uint8_t bl_night;
-    uint8_t bl_day;
     uint8_t ill_r;
     uint8_t ill_g;
     uint8_t ill_b;
@@ -75,11 +73,11 @@ static uint8_t mcustate[19];
 static uint8_t mcukey[8];
 static uint8_t mcucan[652];
 
-static int mcucan0;
-static int mcuver44;
-static int mcuid128;
-static int mcuid129;
-static int armstate0x5;
+static int mcuid129; // FIXME
+
+static uint8_t paraok;
+static uint8_t verok;
+static uint8_t idok;
 
 static void mcu_print_arr(uint8_t *arr, size_t size) {
     size_t i;
@@ -105,17 +103,13 @@ static int mcu_send_command(uint8_t cmd, const uint8_t *data, uint8_t length) {
     int ret;
     int i;
 
-    // Calculate checksum
-    checksum = 0;
-    checksum ^= cmd;
+    checksum = cmd;
     checksum ^= length;
     for (i = 0; i < length; i++) {
         checksum ^= data[i];
     }
 
     pthread_mutex_lock(&uart_lock);
-
-    //LOG_D("Sending command 0x%02X with length %d and checksum 0x%02X", cmd, length, checksum);
 
     ret = uart_write(&mcu_uart, &magic, 1);
     if (ret != 1) {
@@ -156,7 +150,7 @@ exit:
 static void mcu_send_arm_state() {
     uint8_t data[9] = {0};
 
-    data[0] = (arm_state.state & 0x0F);
+    data[0] |= arm_state.state;
     if (arm_state.mute_state != 0) {
         data[0] |= MUTE;
     }
@@ -169,22 +163,21 @@ static void mcu_send_arm_state() {
     if (arm_state.cmmb_state != 0) {
         data[0] |= CMMB;
     }
-
     if (arm_state.fcam_state != 0) {
         data[1] |= FCAM;
     }
     if (arm_state.bl_ill_state != 0) {
         data[1] |= BL_ILL;
     }
-    if (arm_state.bl_state == 1) {
+    if (arm_state.bl_day_night == 1) {
         data[1] |= ILL_1;
-    } else if (arm_state.bl_state == 2) {
+    } else if (arm_state.bl_day_night == 2) {
         data[1] |= ILL_2;
     }
     if (arm_state.power_off != 0) {
         data[1] |= POWER_OFF;
     }
-    if (arm_state.bl_turn_int != 0) {
+    if (arm_state.bl_state != 0) {
         data[1] |= BKL_TURN_INT;
     }
     if (arm_state.bl_turn_can != 0) {
@@ -199,20 +192,57 @@ static void mcu_send_arm_state() {
         data[1] |= EX_AMP;
     }
 
-    data[2] = arm_state.bl_day << 4 | arm_state.bl_night;
-    data[3] = *((int *) &ftsetting[3028]);//arm_state.standby_time;
-    data[4] = *((int *) &ftsetting[2936]);//arm_state.ill_r;
-    data[5] = *((int *) &ftsetting[2940]);//arm_state.ill_g;
-    data[6] = *((int *) &ftsetting[2944]);//arm_state.ill_b;
-    data[7] = *((int *) &ftsetting[1776]);//arm_state.gsensor;
-    data[8] = *((int *) &ftsetting[1824]);//arm_state.lcd_vcom;
+    data[2] = arm_state.bl_day << 4 | arm_state.bl_night; // 0x63
+    data[3] = arm_state.standby_time; // 0x00
+    data[4] = arm_state.ill_r; // 0xFF
+    data[5] = arm_state.ill_g; // 0xFF
+    data[6] = arm_state.ill_b; // 0xFF
+    data[7] = arm_state.gsensor; // 0x4B
+    data[8] = arm_state.lcd_vcom; // 0x00
 
     mcu_send_command(0x53, data, sizeof(data));
 }
 
-void mcu_set_backlight(int backlight) {
-    LOG_D("Setting backlight to %d", backlight);
-    arm_state.bl_day = arm_state.bl_night = (backlight & 0x0F);
+void mcu_set_day_backlight(uint8_t backlight) {
+    LOG_D("Setting day backlight to %d", backlight);
+    arm_state.bl_day = backlight;
+    mcu_send_arm_state();
+}
+
+void mcu_set_night_backlight(uint8_t backlight) {
+    LOG_D("Setting night backlight to %d", backlight);
+    arm_state.bl_night = backlight;
+    mcu_send_arm_state();
+}
+
+void mcu_set_backlight_state(uint8_t state) {
+    LOG_D("Setting backlight state to %d", state);
+    arm_state.bl_day_night = state;
+    mcu_send_arm_state();
+}
+
+void mcu_set_backlight_ill_state(uint8_t state) {
+    LOG_D("Setting ill state to %d", state);
+    arm_state.bl_ill_state = state;
+    mcu_send_arm_state();
+}
+
+void mcu_set_turn_can(uint8_t state) {
+    LOG_D("Setting turn can to %d", state);
+    arm_state.bl_turn_can = state;
+    mcu_send_arm_state();
+}
+
+void mcu_set_turn_int(uint8_t state) {
+    LOG_D("Setting turn int to %d", state);
+    arm_state.bl_state = state;
+    mcu_send_arm_state();
+}
+
+void mcu_send_power_off(void) {
+    LOG_D("Sending bye bye");
+    //arm_state.state = 0x05;
+    arm_state.power_off = 1;
     mcu_send_arm_state();
 }
 
@@ -233,7 +263,7 @@ static int mcu_handle_packet(mcu_packet_t *packet) {
                     uVar5 = uVar5 + 1;
                 } while (uVar5 != 0x20);
                 mcuid32 = 0;*/
-                mcuid128 = 1;
+                idok = 1;
             }
             break;
         }
@@ -247,10 +277,10 @@ static int mcu_handle_packet(mcu_packet_t *packet) {
         }
         case 0x53: {
             uint8_t uVar13 = packet->data[4];
-            mcustate[0] = packet->data[0] & 1;
+            paraok = packet->data[0] & 1;
             uint8_t uVar15 = packet->data[3];
             mcustate[1] = (packet->data[0] >> 1) & 1;
-            mcustate[11] = packet->data[3];
+            mcustate[11] = packet->data[3]; // steering wheel buttons
             mcustate[2] = (packet->data[0] >> 1) & 0b10; // TODO: TEST ME!
             mcustate[3] = (packet->data[0] >> 3); // TODO: FIX ME!
             mcustate[17] = (packet->data[0] >> 5); // TODO: FIX ME!
@@ -312,7 +342,7 @@ static int mcu_handle_packet(mcu_packet_t *packet) {
                 *puVar3 = (ushort)*pbVar6;
             } while (iVar8 != 0xc);
             mcuver._24_2_ = 0;*/
-            mcuver44 = 1;
+            verok = 1;
             int uVar13 = packet->data[13] << 0x10 | packet->data[12] << 0x18 |
                     packet->data[15] | packet->data[14] << 8;
             LOG_D("McuVer OK! mcu-time = %d", uVar13);
@@ -374,8 +404,7 @@ static int mcu_read_packet(mcu_packet_t *mcu_packet) {
         return -errno;
     }
 
-    checksum = 0;
-    checksum ^= mcu_packet->cmd;
+    checksum = mcu_packet->cmd;
     checksum ^= mcu_packet->len;
     for (i = 0; i < mcu_packet->len; i++) {
         checksum ^= mcu_packet->data[i];
@@ -393,98 +422,67 @@ static void mcu_send_hold(void) {
     uint8_t data[1] = {0};
 
     data[0] = 0;
+
     mcu_send_command(0x48, data, sizeof(data));
 }
 
-static void mcu_send_init_1(void) {
-    uint8_t data[0xFF];
+static void mcu_state_machine(int *state) {
+    static uint8_t counter;
 
-    memset(data, 0, 0x3C);
-
-    uint8_t *puVar1 = data - 1;
-    int *puVar4 = (int *) (ftsetting + 0x6C);
-    int *puVar3 = puVar4;
-    do {
-        puVar3 = puVar3 + 1;
-        puVar1 = puVar1 + 1;
-        *puVar1 = (char)*puVar3;
-    } while (puVar3 != (int *)(ftsetting + 0xAC));
-    uint8_t *puVar2 = data + 0xF;
-    puVar3 = puVar4;
-    do {
-        puVar3 = puVar3 + 1;
-        puVar2 = puVar2 + 1;
-        *puVar2 = *puVar3 >> 8;
-    } while (puVar3 != (int *) (ftsetting + 0xAC));
-    puVar2 = data + 0x1F;
-    do {
-        puVar4 = puVar4 + 1;
-        puVar2 = puVar2 + 1;
-        *puVar2 = *puVar4 >> 0x10;
-    } while (puVar4 != (int *) (ftsetting + 0xAC));
-
-    //memcpy(data, &ftsetting[0x6D], sizeof(data));
-    data[48] = 0;
-    data[49] = 0;
-    data[50] = 0;
-    data[51] = 0;
-    data[52] = 0;
-    data[53] = 0;
-    data[54] = 0;
-    data[55] = 0;
-    data[56] = (*((int *) &ftsetting[2596])) != 0;
-    data[56] |= (*((int *) &ftsetting[108])) << 4;
-    data[57] = 0;
-    data[58] = 0;
-    data[59] = *((int *) &ftsetting[1844]);
-
-    mcu_send_command(0x50, data, 0x3C);
+    switch (*state) {
+        case 0: {
+            paraok = 0;
+            verok = 0;
+            idok = 0;
+            mcuid129 = 0;
+            arm_state.state = 0x00;
+            arm_state.mute_state = 1;
+            arm_state.disc_state = 0;
+            counter = 0;
+            (*state)++;
+            break;
+        }
+        case 1: {
+            uint8_t tmp[60] = {0};
+            mcu_send_arm_state();
+            mcu_send_command(0x50, tmp, 60); // mcu_send_sw_buttons()
+            mcu_send_command(0x4B, tmp, 46); // mcu_send_init_2()
+            LOG_D("Send Sync cmd, paraok=%d, verok=%d, idok=%d", paraok, verok, idok);
+            (*state)++;
+            break;
+        }
+        case 2: {
+            if (paraok == 0 || verok == 0 || idok == 0) {
+                counter++;
+                if (counter > 10) {
+                    counter = 0;
+                    (*state)--;
+                }
+            } else {
+                arm_state.state = 0x0A;
+                LOG_D("MCU Sync OK! BatFirst=%d", mcustate[1]);
+                (*state)++;
+            }
+            break;
+        }
+        default: {
+            counter++;
+            if (counter > 6) {
+                counter = 0;
+                mcu_send_arm_state();
+            }
+            break;
+        }
+    }
 }
 
-static void mcu_send_init_2(void) {
-    uint8_t data[0xFF];
-
-    memset(data, 0, 0x2E);
-
-    uint8_t *puVar10 = data - 1;
-    int *puVar4 = (int *) (ftsetting + 0xAC);
-    do {
-        puVar4 = puVar4 + 1;
-        puVar10 = puVar10 + 1;
-        *puVar10 = *puVar4;
-    } while (puVar4 != (int *) (ftsetting + 0xF4));
-    LOG_D("First while finished.");
-    puVar4 = (int *) (ftsetting + 0xF4);
-    uint8_t *puVar11 = data + 0x11;
-    do {
-        puVar4 = puVar4 + 1;
-        puVar11 = puVar11 + 1;
-        *puVar11 = *puVar4;
-    } while (puVar4 != (int *) (ftsetting + 0x13C));
-    LOG_D("Second while finished.");
-    data[36] = *((int *) &ftsetting[1552]);
-    data[37] = ftsetting[1560];
-    data[38] = ftsetting[1564];
-    data[39] = ftsetting[1568];
-    data[40] = ftsetting[1572];
-    data[41] = *((int *) &ftsetting[1556]);
-    data[42] = data[37];
-    data[43] = data[38];
-    data[44] = data[39];
-    data[45] = data[40];
-
-    mcu_send_command(0x4B, data, 0x2E);
-}
-
-void * mcu_thread_func(void *arg) {
+void *mcu_thread_func(void *arg) {
     mcu_packet_t mcu_packet;
     int ret;
     int state = 0;
 
     while (!closed) {
         usleep(16667);
-        //sleep(1);
-        //usleep(300000);
 
         if (state != 0) {
             ret = mcu_read_packet(&mcu_packet);
@@ -496,87 +494,14 @@ void * mcu_thread_func(void *arg) {
             }
         }
 
-        //LOG_D("state = %d", state);
-        switch (state) {
-            case 0: {
-                state = 1;
-                mcustate[0] = 0;
-                mcucan0 = 0;
-                mcuver44 = 0;
-                mcuid128 = 0;
-                mcuid129 = 0;
-                arm_state.state = 0;
-                arm_state.mute_state = 1;
-                arm_state.disc_state = 0;
-                state = 2; // TODO: FIX ME OR REMOVE CASE 1
-                break;
-            }
-            case 1: {
-                armstate0x5++;
-                if (armstate0x5 > 6) {
-                    armstate0x5 = 0;
-                    mcu_send_hold();
-                }
-                break;
-            }
-            case 2: {
-                state = 3;
-                mcu_send_arm_state();
-                mcu_send_init_1();
-                mcu_send_init_2();
-                armstate0x5 = 0;
-                LOG_D("Send Sync cmd, paraok=%d, verok=%d, idok=%d", mcustate[0], mcuver44, mcuid128);
-                break;
-            }
-            case 3: {
-                if (mcustate[0] == 0 || mcuver44 == 0 || mcuid128 == 0) {
-                    armstate0x5++;
-                    if (armstate0x5 > 10) {
-                        state = 2;
-                    }
-                } else {
-                    state = 4;
-                    arm_state.state = '\n';
-                    LOG_D("Mcu Sync OK! BatFirst=%d", mcustate[1]);
-                }
-                break;
-            }
-            default: {
-                armstate0x5++;
-                if (armstate0x5 > 6) {
-                    mcu_send_arm_state();
-                    armstate0x5 = 0;
-                }
-                break;
-            }
-        }
+        mcu_state_machine(&state);
     }
 
     return NULL;
 }
 
-void mcu_toggle_backlight(void) {
-    if (arm_state.bl_state == 0) {
-        arm_state.bl_state = 2;
-    } else {
-        arm_state.bl_state = 0;
-    }
-    LOG_D("bl_state = %d", arm_state.bl_state);
-    mcu_send_arm_state();
-}
-
 int mcu_init(void) {
     int ret;
-
-    ret = open("/dev/block/platform/soc/11230000.mmc/by-name/forfanzone", O_RDONLY);
-    if (ret < 0) {
-        LOG_E("Failed to open forfanzone");
-    } else {
-        if (read(ret, ftsetting, sizeof(ftsetting)) != sizeof(ftsetting)) {
-            LOG_E("Failed to read ftsetting!");
-        }
-        close(ret);
-    }
 
     ret = pthread_mutex_init(&uart_lock, NULL);
     if (ret < 0) {
@@ -593,13 +518,15 @@ int mcu_init(void) {
 
     memset(&arm_state, 0, sizeof(arm_state));
     arm_state.bl_ill_state = 1;
-    //arm_state.bl_turn_int = 1;
+    arm_state.bl_state = 0;
     arm_state.ext_amp = 1;
+    arm_state.bl_day = 6;
+    arm_state.bl_night = 3;
+    arm_state.standby_time = 0x00;
     arm_state.ill_r = 0xFF;
     arm_state.ill_g = 0xFF;
     arm_state.ill_b = 0xFF;
     arm_state.gsensor = 0x4B;
-    arm_state.bl_day = arm_state.bl_night = 6;
 
     ret = pthread_create(&mcu_thread, NULL, mcu_thread_func, NULL);
     if (ret < 0) {

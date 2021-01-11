@@ -1,18 +1,13 @@
-package com.ts.MainUI;
+package com.ts.mainui;
 
 import android.app.ProgressDialog;
-import android.content.Context;
-import android.content.DialogInterface;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
-import com.ts.MainUI.databinding.ActivityLearnTouchKeyBinding;
-import com.ts.MainUI.hardware.TouchKey;
-import com.ts.MainUI.hardware.TouchKeyManager;
+import com.ts.mainui.databinding.ActivityLearnTouchKeyBinding;
+import com.ts.mainui.hardware.TouchKey;
 import com.yyw.ts70xhw.Iop;
 
 import java.util.HashMap;
