@@ -7,7 +7,7 @@ import com.lgb.canmodule.CanDataInfo;
 import com.lgb.canmodule.CanJni;
 
 public class CanGolfVehicleStatusActivity {
-    public static final int BTN_REPORTS = 1;
+    /*public static final int BTN_REPORTS = 1;
     public static final int BTN_START_STOP = 2;
     public static final int BTN_TOP_LEFT = 3;
     public static final int BTN_TOP_RIGHT = 4;
@@ -44,7 +44,7 @@ public class CanGolfVehicleStatusActivity {
     }
 
     private void ResetData(boolean check) {
-        /*if (this.mCurrentPage != 1) {
+        if (this.mCurrentPage != 1) {
             if (this.mCurrentPage == 2) {
                 CanJni.TeramontGetTpmsData(this.mTpmsData);
                 CanJni.GolfGetTyres(this.mTyresData);
@@ -125,11 +125,11 @@ public class CanGolfVehicleStatusActivity {
             } else if (!check) {
                 CanJni.GolfQuery(97, 0);
             }
-        }*/
+        }
     }
 
     private void ShowPage() {
-        /*boolean bStatusShow = this.mCurrentPage == 0;
+        boolean bStatusShow = this.mCurrentPage == 0;
         boolean bTPMSShow = this.mCurrentPage == 1;
         boolean bTyresShow = this.mCurrentPage == 2;
         if (bStatusShow) {
@@ -166,7 +166,7 @@ public class CanGolfVehicleStatusActivity {
         }
         for (int i3 = 0; i3 < this.mTpmsTip.length; i3++) {
             setViewShow(this.mTpmsTip[i3], bTPMSShow);
-        }*/
+        }
     }
 
     private void PageSwitch(boolean isNext) {
@@ -181,7 +181,7 @@ public class CanGolfVehicleStatusActivity {
     }
 
     public void onClick(View v) {
-        /*int Id = ((Integer) v.getTag()).intValue();
+        int Id = ((Integer) v.getTag()).intValue();
         switch (Id) {
             case 1:
                 enterSubWin(CanGolfReportsActivity.class);
@@ -207,7 +207,7 @@ public class CanGolfVehicleStatusActivity {
                 return;
             default:
                 return;
-        }*/
+        }
     }
 
     public void onOK(int param) {
@@ -215,4 +215,5 @@ public class CanGolfVehicleStatusActivity {
             CanJni.GolfSendCmd(34, 1);
         }
     }
+   */
 }

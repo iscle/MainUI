@@ -1,10 +1,7 @@
 package com.ts.can;
 
-import android.os.Bundle;
-import android.util.Log;
-
-public class CanCarACActivity extends CanBaseActivity {
-    public static final String TAG = "CanCarACActivity";
+public class CanCarACActivity {
+    /*public static final String TAG = "CanCarACActivity";
     public static boolean mfgAcIconClick = false;
 
 
@@ -24,4 +21,6 @@ public class CanCarACActivity extends CanBaseActivity {
         super.onResume();
         Log.d(TAG, "-----onResume-----");
     }
+
+     */
 }

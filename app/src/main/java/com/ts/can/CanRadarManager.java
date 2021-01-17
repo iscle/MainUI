@@ -9,7 +9,7 @@ import com.lgb.canmodule.CanJni;
 import com.yyw.ts70xhw.FtSet;
 
 public class CanRadarManager {
-    public static final int Mode_CameraForeRadar = 4;
+    /*public static final int Mode_CameraForeRadar = 4;
     public static final int Mode_CameraOnly = 2;
     public static final int Mode_CameraRearRadar = 3;
     public static final int Mode_Null = 0;
@@ -173,7 +173,6 @@ public class CanRadarManager {
         return fore.nLeftDis != 0 || fore.nRightDis != 0 || fore.nMidLtDis != 0 || fore.nMidRtDis != 0 || this.mFordFore.LtAssist != 0 || this.mFordFore.RtAssist != 0 || this.mFordFore.LtMidAssist != 0 || this.mFordFore.RtMidAssist != 0 || this.mFordRear.LtAssist != 0 || this.mFordRear.RtAssist != 0 || this.mFordRear.LtMidAssist != 0 || this.mFordRear.RtMidAssist != 0;
     }
 
-    /* access modifiers changed from: package-private */
     public class ManageData {
         public long DelayTick;
         public CanDataInfo.CAN_RadarInfo ForeRadar;
@@ -187,4 +186,5 @@ public class CanRadarManager {
         ManageData() {
         }
     }
+    */
 }
