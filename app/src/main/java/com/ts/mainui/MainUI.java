@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.os.SystemProperties;
 import android.util.Log;
 
+import com.lgb.canmodule.CanJni;
 import com.ts.mainui.hardware.TouchKeyManager;
 import com.yyw.ts70xhw.FtSet;
 import com.yyw.ts70xhw.Iop;
