@@ -27,6 +27,10 @@ public class NativeLib {
         NativeLib.iNativeLib = iNativeLib;
     }
 
+    public static native void dspSendVolume();
+
+    public static native void dspInit();
+
     public interface INativeLib {
         void onTouchButtonPressed(int x, int y);
     }

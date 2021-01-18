@@ -246,6 +246,14 @@ void mcu_send_power_off(void) {
     mcu_send_arm_state();
 }
 
+void mcu_send_beep(void) {
+    uint8_t data[1] = {0};
+
+    data[0] = 1;
+
+    mcu_send_command(0x42, data, sizeof(data));
+}
+
 static int mcu_handle_packet(mcu_packet_t *packet) {
     //LOG_D("Handling new MCU packet: cmd = 0x%2X, len = %d", packet->cmd, packet->len);
 

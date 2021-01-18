@@ -159,3 +159,14 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
 
     return JNI_VERSION_1_6;
 }
+
+JNIEXPORT void JNICALL
+Java_com_ts_mainui_NativeLib_dspSendVolume(JNIEnv *env, jclass clazz) {
+    dsp_send_volume(6);
+}
+
+JNIEXPORT void JNICALL
+Java_com_ts_mainui_NativeLib_dspInit(JNIEnv *env, jclass clazz) {
+    LOG_D("Sending init...");
+    dsp_send_init();
+}

@@ -44,21 +44,6 @@ static void dsp_print_arr(uint8_t *arr, size_t size) {
     free(buf);
 }
 
-int dsp_read_uart(void) {
-    uint8_t data[32];
-    int ret;
-
-    ret = uart_read(&dsp_uart, data, 4);
-
-    if (ret < 0) {
-        LOG_D("dsp read failed: %s (%d)", strerror(errno), errno);
-    } else {
-        dsp_print_arr(data, ret);
-    }
-
-    return ret;
-}
-
 static int dsp_send_command(uint8_t cmd, const uint8_t *data, uint8_t length) {
     const uint8_t magic[2] = {0x8A, 0xA8};
     uint8_t checksum[2] = {0x00, 0x5A};
@@ -161,9 +146,9 @@ int dsp_send_fadbal(uint8_t fad, uint8_t bal) {
 int dsp_send_filter(uint8_t low_pass_enable, uint16_t low_pass, uint8_t high_pass_enable, uint16_t high_pass) {
     uint8_t data[6];
 
-    if ((low_pass_enable < 0 || low_pass_enable > 1) ||
+    if ((low_pass_enable > 1) ||
         (low_pass < 1000 || low_pass > 20000) ||
-        (high_pass_enable < 0 || high_pass_enable > 1) ||
+        (high_pass_enable > 1) ||
         (high_pass < 20 || high_pass > 500)) {
         return -EINVAL;
     }
@@ -185,9 +170,14 @@ int dsp_send_filter_fb(uint8_t filter_fb) {
     return 0;
 }
 
-// fs => 32/64
+// fs => 0x20/0x40
 int dsp_send_fs(uint8_t fs) {
     uint8_t data[1];
+
+    if (fs != 0x20 &&
+        fs != 0x40) {
+        return -EINVAL;
+    }
 
     data[0] = fs;
 
@@ -239,10 +229,10 @@ int dsp_send_subfreq(uint8_t subfreq) {
 int dsp_send_vbass(uint8_t enable, uint16_t gain, uint16_t level, uint16_t freq) {
     uint8_t data[22];
 
-    if ((enable < 0 || enable > 1) ||
-        (gain < 0 || gain > 400) ||
-        (level < 0 || level > 400) ||
-        (freq < 0 || freq > 150)) {
+    if (enable > 1 ||
+        gain > 400 ||
+        level > 400 ||
+        freq > 150) {
         return -EINVAL;
     }
 
@@ -276,7 +266,7 @@ int dsp_send_vbass(uint8_t enable, uint16_t gain, uint16_t level, uint16_t freq)
 int dsp_send_volume(uint8_t volume) {
     uint8_t data[1];
 
-    if (volume < 0 || volume > 197) {
+    if (volume > 197) {
         return -EINVAL;
     }
 
@@ -288,15 +278,55 @@ int dsp_send_volume(uint8_t volume) {
 int dsp_send_init(void) {
     int ret;
 
+    LOG_D("Sending init2...");
+
     ret = dsp_send_volume(0);
+    if (ret < 0) {
+        LOG_E("init: Error while sending volume!");
+    }
+    usleep(2000);
     ret = dsp_send_fadbal(0, 0);
+    if (ret < 0) {
+        LOG_E("init: Error while sending fadval!");
+    }
+    usleep(2000);
     ret = dsp_send_loud(0, 0, 0, 0, 0);
+    if (ret < 0) {
+        LOG_E("init: Error while sending loud!");
+    }
+    usleep(2000);
     ret = dsp_send_vbass(0, 0, 0, 0);
-    ret = dsp_send_filter(0, 0, 0, 0);
+    if (ret < 0) {
+        LOG_E("init: Error while sending vbass!");
+    }
+    usleep(2000);
+    ret = dsp_send_filter(0, 1000, 0, 20);
+    if (ret < 0) {
+        LOG_E("init: Error while sending filter!");
+    }
+    usleep(2000);
     ret = dsp_send_filter_fb(0);
+    if (ret < 0) {
+        LOG_E("init: Error while sending filter fb!");
+    }
+    usleep(2000);
     ret = dsp_send_subfreq(0);
+    if (ret < 0) {
+        LOG_E("init: Error while sending subfreq!");
+    }
+    usleep(2000);
     ret = dsp_send_eq(0);
+    if (ret < 0) {
+        LOG_E("init: Error while sending eq!");
+    }
+    usleep(2000);
     ret = dsp_send_delay(0, 0, 0, 0);
+    if (ret < 0) {
+        LOG_E("init: Error while sending delay!");
+    }
+    usleep(2000);
+
+    dsp_send_fs(0x20);
 
     return 0;
 }
@@ -359,6 +389,7 @@ static int dsp_handle_packet(dsp_packet_t *packet) {
 int dsp_read_packet(dsp_packet_t *dsp_packet) {
     uint8_t checksum;
     uint8_t i;
+    uint8_t dummy;
     int ret;
 
     ret = uart_read(&dsp_uart, &dsp_packet->magic[0], 1);
@@ -392,6 +423,12 @@ int dsp_read_packet(dsp_packet_t *dsp_packet) {
         return -EIO;
     }
 
+    ret = uart_read(&dsp_uart, &dummy, 1);
+    if (ret != 1) {
+        free(dsp_packet->data);
+        return -EIO;
+    }
+
     ret = uart_read(&dsp_uart, &dsp_packet->checksum, 1);
     if (ret != 1) {
         free(dsp_packet->data);
@@ -399,6 +436,8 @@ int dsp_read_packet(dsp_packet_t *dsp_packet) {
     }
 
     checksum = 0x5A;
+    checksum += dsp_packet->cmd;
+    checksum += dsp_packet->len;
     for (i = 0; i < dsp_packet->len; i++) {
         checksum += dsp_packet->data[i];
     }
@@ -437,7 +476,15 @@ void * dsp_thread_func(void *arg) {
 
         //dsp_read_packet(&dsp_packet);
         LOG_D("Calling dsp_read_uart!");
-        dsp_read_uart();
+        //dsp_read_uart();
+        ret = dsp_read_packet(&dsp_packet);
+        if (ret < 0) {
+            LOG_E("Failed to read packet: %d", ret);
+        } else {
+            dsp_handle_packet(&dsp_packet);
+            free(dsp_packet.data);
+        }
+
         LOG_D("dsp_read_uart finished!");
 
     }

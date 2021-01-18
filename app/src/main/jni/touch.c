@@ -53,7 +53,9 @@ void *touch_thread_func(void *arg) {
             int x = 1024 - buf[1];
             int y = buf[2];
 
-            i_native_on_touch_button_pressed(x, y);
+            if (x < 0) {
+                i_native_on_touch_button_pressed(x, y);
+            }
         }
 
         last_point_count = buf[0];

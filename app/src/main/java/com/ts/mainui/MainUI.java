@@ -28,6 +28,7 @@ public class MainUI extends Application {
         Intent serviceIntent = new Intent(this, MainService.class);
         //startService(serviceIntent);
 
+        CanJni.CanStart(2, 0); // For Golf 7 RZC Box
         NativeLib.init();
     }
 

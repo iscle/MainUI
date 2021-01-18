@@ -25,10 +25,7 @@ public class MainActivity extends BaseAppCompatActivity {
         binding.turncan1Btn.setOnClickListener(v -> NativeLib.adjustTurnCan());
         binding.turnint0Btn.setOnClickListener(v -> NativeLib.adjustTurnInt());
         binding.turnint1Btn.setOnClickListener(v -> {
-            NativeLib.sendPowerOff();
-
-            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-            pm.reboot(null);
+            startActivity(new Intent(MainActivity.this, DSPActivity.class));
         });
     }
 }
